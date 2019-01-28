@@ -53,3 +53,18 @@ void led_set_user(uint8_t usb_led) {
         DDRB &= ~(1 << 2); PORTB &= ~(1 << 2);
     }
 }
+
+uint32_t layer_state_set_user(uint32_t state) {
+    switch (biton32(state)) {
+    case LFUN:
+        rgblight_setrgb (0xFF,  0x00, 0x00);
+        break;
+    case LKBD:
+        rgblight_setrgb (0x7A,  0x00, 0xFF);
+        break;
+    default: //  for any other layers, or the default layer
+        rgblight_setrgb (0x00,  0x00, 0x00);
+        break;
+    }
+  return state;
+}
