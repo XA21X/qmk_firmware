@@ -3,8 +3,8 @@
 #define _______ KC_TRNS
 
 #define LDEF 0
-#define LFUN 1
-#define LMAC 2
+#define LFUN 2
+#define LMAC 1
 #define LKBD 3
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
