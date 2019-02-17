@@ -7,6 +7,23 @@
 #define LMAC 1
 #define LKBD 3
 
+
+typedef union {
+  uint32_t raw;
+  struct {
+    bool     rgb_layer_change :1;
+  };
+} user_config_t;
+
+user_config_t user_config;
+
+
+enum user_keycodes {
+  EPRM = SAFE_RANGE,
+  RGB_LYR
+};
+
+
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
   [LDEF] = LAYOUT(
@@ -22,7 +39,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,
     _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  RESET,    _______,
     _______,  RGB_TOG,  RGB_MOD,  RGB_HUI,  RGB_HUD,  RGB_SAI,  RGB_SAD,  RGB_VAI,  RGB_VAD,  _______,  _______,  _______,  _______,  _______,            _______,
-    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,                      _______,  _______,
+    _______,  RGB_LYR,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,                      _______,  _______,
     _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  TG(LMAC), _______,  _______,  _______,  _______,            _______,  _______,
     _______,  _______,  _______,                      _______,  _______,  _______,                      _______,  _______,  _______,  _______,  _______,  _______
   ),
@@ -46,15 +63,26 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
   ),
 };
 
-void led_set_user(uint8_t usb_led) {
-    if (usb_led & (1 << USB_LED_CAPS_LOCK)) {
-        DDRB |= (1 << 2); PORTB &= ~(1 << 2);
-    } else {
-        DDRB &= ~(1 << 2); PORTB &= ~(1 << 2);
-    }
+void keyboard_post_init_user(void) {
+  // Call the keymap level matrix init.
+
+  // Read the user config from EEPROM
+  user_config.raw = eeconfig_read_user();
+
+  // Set default layer, if enabled
+  if (user_config.rgb_layer_change) {
+    layer_state_set(layer_state);
+    rgblight_enable_noeeprom();
+  }
 }
 
+
+rgblight_config_t old_config;
+
+
 uint32_t layer_state_set_user(uint32_t state) {
+  if (user_config.rgb_layer_change) {
+    rgblight_mode_noeeprom(RGBLIGHT_MODE_STATIC_LIGHT);
     switch (biton32(state)) {
     case LFUN:
         rgblight_setrgb (0xFF,  0x00, 0x00);
@@ -63,8 +91,33 @@ uint32_t layer_state_set_user(uint32_t state) {
         rgblight_setrgb (0x7A,  0x00, 0xFF);
         break;
     default: //  for any other layers, or the default layer
-        rgblight_setrgb (0x00,  0x00, 0x00);
+        old_config.raw = eeconfig_read_rgblight();
+        rgblight_mode_noeeprom(old_config.mode);
         break;
     }
+  } else {
+    old_config.raw = eeconfig_read_rgblight();
+    rgblight_mode_noeeprom(old_config.mode);
+  }
   return state;
+}
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+  switch (keycode) {
+    case EPRM:
+        if (record->event.pressed) {
+            eeconfig_init(); // resets the EEPROM to default
+        }
+        return false; break;
+    case RGB_LYR:  // This allows me to use underglow as layer indication, or as normal
+        if (record->event.pressed) {
+            user_config.rgb_layer_change ^= 1; // Toggles the status
+            eeconfig_update_user(user_config.raw); // Writes the new status to EEPROM
+            if (user_config.rgb_layer_change) { // if layer state indication is enabled,
+                layer_state_set(layer_state);   // then immediately update the layer color
+            }
+        }
+        return false; break;
+  }
+  return true;
 }
